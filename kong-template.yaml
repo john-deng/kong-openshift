@@ -1,0 +1,388 @@
+apiVersion: v1
+kind: Template
+labels:
+  version: "0.10"
+  group: infrastructure
+metadata:
+  annotations:
+    description: Creates the API gateway Kong for microservices.
+    tags: instant-app,kong
+    version: "${KONG_BUILD_TAG}"
+  name: kong-template
+objects:
+- kind: DeploymentConfig
+  apiVersion: v1
+  metadata:
+    name: ${DATABASE_SERVICE_NAME}
+  spec:
+    replicas: 1
+    selector:
+      name: ${DATABASE_SERVICE_NAME}
+    strategy:
+      recreateParams:
+        timeoutSeconds: 900
+      resources: {}
+      type: Recreate
+    template:
+      metadata:
+        creationTimestamp: null
+        labels:
+          app: kong
+          name: ${DATABASE_SERVICE_NAME}
+      spec:
+        containers:
+        - name: ${DATABASE_SERVICE_NAME}
+          image: ' '
+          imagePullPolicy: IfNotPresent
+          env:
+          - name: POSTGRESQL_USER
+            value: "${POSTGRESQL_USER}"
+          - name: POSTGRESQL_PASSWORD
+            value: "${POSTGRESQL_PASSWORD}"
+          - name: POSTGRESQL_DATABASE
+            value: "${POSTGRESQL_DATABASE}"
+          livenessProbe:
+            failureThreshold: 3
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            successThreshold: 1
+            tcpSocket:
+              port: 5432
+            timeoutSeconds: 1
+          ports:
+          - containerPort: 5432
+            protocol: TCP
+          readinessProbe:
+            exec:
+              command:
+              - /bin/sh
+              - -i
+              - -c
+              - psql -h 127.0.0.1 -U $POSTGRESQL_USER -q -d $POSTGRESQL_DATABASE -c 'SELECT 1'
+            failureThreshold: 3
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            successThreshold: 1
+            timeoutSeconds: 1
+          resources:
+            limits:
+              memory: "${DATABASE_MEMORY_LIMIT}"
+          securityContext:
+            capabilities: {}
+            privileged: false
+            supplementalGroups: [65534]
+          terminationMessagePath: /dev/termination-log
+          volumeMounts:
+          - mountPath: /var/lib/pgsql/data
+            name: ${DATABASE_SERVICE_NAME}-data
+        dnsPolicy: ClusterFirst
+        restartPolicy: Always
+        terminationGracePeriodSeconds: 30
+        securityContext: 
+          runAsUser: 26
+        volumes:
+        - name: ${DATABASE_SERVICE_NAME}-data
+          persistentVolumeClaim:
+            claimName: "${KONG_POSTGRESQL_PVC_NAME}"
+    test: false
+    triggers:
+    - imageChangeParams:
+        automatic: true
+        containerNames:
+        - ${DATABASE_SERVICE_NAME}
+        from:
+          kind: ImageStreamTag
+          name: "postgresql:${POSTGRESQL_VERSION}"
+          namespace: openshift
+      type: ImageChange
+    - type: ConfigChange
+- kind: DeploymentConfig
+  apiVersion: v1
+  metadata:
+    name: kong
+  spec:
+    replicas: 1
+    selector:
+      deploymentconfig: kong
+    strategy:
+      resources: {}
+      rollingParams:
+        intervalSeconds: 1
+        maxSurge: 25%
+        maxUnavailable: 25%
+        timeoutSeconds: 600
+        updatePeriodSeconds: 1
+      type: Rolling
+    template:
+      metadata:
+        labels:
+          app: kong
+          deploymentconfig: kong
+      spec:
+        containers:
+        - name: kong
+          image: "kong:${KONG_BUILD_TAG}"
+          imagePullPolicy: IfNotPresent
+          env:
+          - name: KONG_PG_PASSWORD
+            value: ${POSTGRESQL_PASSWORD}
+          - name: KONG_PG_HOST
+            value: ${DATABASE_SERVICE_NAME}.${PROJECT_NAME}.svc.cluster.local
+          - name: KONG_HOST_IP
+            valueFrom:
+              fieldRef:
+                apiVersion: v1
+                fieldPath: status.podIP
+          command: [ "/bin/sh", "-c", "KONG_CLUSTER_ADVERTISE=$(KONG_HOST_IP):7946 KONG_NGINX_DAEMON='off' kong start" ]
+          ports:
+          - name: admin
+            containerPort: 8001
+            protocol: TCP
+          - name: proxy
+            containerPort: 8000
+            protocol: TCP
+          - name: proxy-ssl
+            containerPort: 8443
+            protocol: TCP
+          - name: surf-tcp
+            containerPort: 7946
+            protocol: TCP
+          - name: surf-udp
+            containerPort: 7946
+            protocol: UDP
+          resources:
+            requests:
+              cpu: 750m
+              memory: 1024Mi
+          terminationMessagePath: /dev/termination-log
+        dnsPolicy: ClusterFirst
+        restartPolicy: Always
+        resources:
+          limits:
+            memory: "${KONG_MEMORY_LIMIT}"
+        securityContext:
+          runAsUser: 0
+        terminationGracePeriodSeconds: 30
+    test: false
+    triggers:
+    - type: ConfigChange
+    - imageChangeParams:
+        automatic: true
+        containerNames:
+        - kong
+        from:
+          kind: ImageStreamTag
+          namespace: ${KONG_IMAGE_NAMESPACE}
+          name: "${KONG_IMAGE_NAME}:${KONG_BUILD_TAG}"
+      type: ImageChange
+- kind: Service
+  apiVersion: v1
+  metadata:
+    name: "${DATABASE_SERVICE_NAME}"
+  spec:
+    ports:
+    - name: postgresql
+      protocol: TCP
+      port: 5432
+      targetPort: 5432
+      nodePort: 0
+    selector:
+      name: ${DATABASE_SERVICE_NAME}
+    type: ClusterIP
+    sessionAffinity: None
+
+- kind: Service
+  apiVersion: v1
+  metadata:
+    name: kong-proxy
+  spec:
+    type: LoadBalancer
+    loadBalancerSourceRanges:
+    - 0.0.0.0/0
+    ports:
+    - name: kong-proxy
+      port: 8000
+      targetPort: 8000
+      protocol: TCP
+    - name: kong-proxy-ssl
+      port: 8443
+      targetPort: 8443
+      protocol: TCP
+    selector:
+      app: kong
+
+- kind: Service
+  apiVersion: v1
+  metadata:
+    name: kong-admin
+  spec:
+    type: LoadBalancer
+    loadBalancerSourceRanges:
+    - 0.0.0.0/0
+    ports:
+    - name: kong-admin
+      port: 8001
+      targetPort: 8001
+      protocol: TCP
+    selector:
+      app: kong
+
+- kind: DeploymentConfig
+  apiVersion: v1
+  metadata:
+    name: kong-dashboard
+  spec:
+    replicas: 1
+    selector:
+      deploymentconfig: kong-dashboard
+    strategy:
+      resources: {}
+      rollingParams:
+        intervalSeconds: 1
+        maxSurge: 25%
+        maxUnavailable: 25%
+        timeoutSeconds: 600
+        updatePeriodSeconds: 1
+      type: Rolling
+    template:
+      metadata:
+        labels:
+          app: kong-dashboard
+          deploymentconfig: kong-dashboard
+      spec:
+        containers:
+        - name: kong-dashboard
+          image: "kong-dashboard:${KONG_DASHBOARD_TAG}"
+          imagePullPolicy: IfNotPresent
+          env:
+          - name: kong-dashboard-name
+            value: ${KONG_DASHBOARD_USER}
+          - name: kong-dashboard-pass
+            value: ${KONG_DASHBOARD_PASSWORD}
+          - name: KONG_HOST
+            value: kong.${PROJECT_NAME}.svc.cluster.local
+          #command: [ "npm", "start", "--", "-a", "${KONG_DASHBOARD_USER}=${KONG_DASHBOARD_PASSWORD}" ]
+          ports:
+          - name: dashboard
+            containerPort: 8080
+            protocol: TCP
+          resources:
+            requests:
+              cpu: 750m
+              memory: 1024Mi
+          terminationMessagePath: /dev/termination-log
+        dnsPolicy: ClusterFirst
+        restartPolicy: Always
+        resources:
+          limits:
+            memory: "1Gi"
+        securityContext:
+          runAsUser: 0
+        terminationGracePeriodSeconds: 30
+    test: false
+    triggers:
+    - type: ConfigChange
+    - imageChangeParams:
+        automatic: true
+        containerNames:
+        - kong-dashboard
+        from:
+          kind: ImageStreamTag
+          namespace: ${KONG_IMAGE_NAMESPACE}
+          name: "kong-dashboard:${KONG_DASHBOARD_TAG}"
+      type: ImageChange
+
+- kind: Service
+  apiVersion: v1
+  metadata:
+    name: kong-dashboard
+  spec:
+    type: LoadBalancer
+    loadBalancerSourceRanges:
+    - 0.0.0.0/0
+    ports:
+    - name: kong-dashboard
+      port: 8080
+      targetPort: 8080
+      protocol: TCP
+    selector:
+      app: kong-dashboard
+
+parameters:
+- name: PROJECT_NAME
+  displayName: Database Namespace
+  description: The namespace of the database.
+  value: ${NAMESPACE}
+  required: true
+- name: DATABASE_SERVICE_NAME
+  displayName: Database Service Name
+  description: The name of the OpenShift Service exposed for the database.
+  value: kong-postgresql
+  required: true
+- name: DATABASE_MEMORY_LIMIT
+  displayName: Database Memory Limit
+  description: Maximum amount of memory the database can use.
+  value: 512Mi
+- name: KONG_MEMORY_LIMIT
+  displayName: kong Memory Limit
+  description: Maximum amount of memory the kong can use.
+  value: 2Gi
+- name: KONG_POSTGRESQL_PVC_NAME
+  displayName: kong database PVC name
+  description: kong database PVC name
+  value: kong-database-claim
+  required: true
+- name: POSTGRESQL_USER
+  displayName: PostgreSQL Connection Username
+  description: Username for PostgreSQL user that will be used for accessing the database.
+  generate: expression
+  from: user[A-Z0-9]{3}
+  value: kong
+  required: true
+- name: POSTGRESQL_PASSWORD
+  displayName: PostgreSQL Connection Password
+  description: Password for the PostgreSQL connection user.
+  generate: expression
+  from: "[a-zA-Z0-9]{16}"
+  required: true
+- name: POSTGRESQL_DATABASE
+  displayName: PostgreSQL Database Name
+  description: Name of the PostgreSQL database accessed.
+  value: kong
+  required: true
+- name: POSTGRESQL_VERSION
+  displayName: Version of PostgreSQL Image
+  description: Version of PostgreSQL image to be used (9.4, 9.5 or latest).
+  value: '9.5'
+  required: true
+- name: KONG_IMAGE_NAMESPACE
+  displayName: kong image namespace
+  description: 'Namespace of the repository containing the kong container image to be used'
+  value: 'openshift'
+  required: true
+- name: KONG_IMAGE_NAME
+  displayName: kong container image name
+  description: 'Name of the kong container image to be used'
+  value: 'kong'
+  required: true
+- name: KONG_BUILD_TAG
+  displayName: kong image tag
+  description: kong image tag (0.10, latest, etc.)
+  value: "0.10"
+  required: true
+- name: KONG_DASHBOARD_TAG
+  displayName: kong dashboard image tag
+  description: kong image tag (v2, latest, etc.)
+  value: "v2"
+  required: true
+- name: KONG_DASHBOARD_USER
+  displayName: kong dashboard username
+  description: kong username (admin, etc.)
+  value: "admin"
+  required: true
+- name: KONG_DASHBOARD_PASSWORD
+  displayName: kong dashboard password
+  description: kong dashboard password (generated if it's not specified)
+  generate: expression
+  from: "[a-zA-Z0-9]{16}"
+  required: true
