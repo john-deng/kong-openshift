@@ -65,7 +65,7 @@ Kong can easily be provisioned to Openshift cluster using the following steps:
     ![](/assets/kong-deployment.png)
 
 
-    Finally, expose service
+    The last step, expose service
     ```bash
     oc expose svc/kong-dashboard
 
@@ -90,4 +90,16 @@ Kong can easily be provisioned to Openshift cluster using the following steps:
 
     Add API to gateway
 
+    Assume that you've deployed the spring-boot app 'appname' which expose port 8080, then fill below form and proess SAVE button.
+    * Name: project-name-app-name-api
+    * Uris: /project-name/app-name/api/
+    * Upstream url: http://appname.projectname.svc.cluster.local:8080/projectname/appname/api/
+
     ![](/assets/kong-dashboard-add-api.png)
+
+    Now you can check your api 
+    ```bash
+    http http://kong-proxy-gateway-dev.openshift-subdomain.com/projectname/appname/api/health
+    ```
+
+    ![](/assets/http-check-gateway-health.png)
