@@ -26,6 +26,6 @@ Kong can easily be provisioned to Kubernetes cluster using the following steps:
     git clone git@github.com:john-deng/kong-openshift.git
     cd kong-openshift
 
-    oc create -f kong-template.yaml
+    oc process -f kong-template.yaml | oc create -f -
     ```
     
