@@ -34,7 +34,7 @@ Kong can easily be provisioned to Openshift cluster using the following steps:
     ```bash
     vim hi.conf
     ```
-    ![](/assets/hi-conf.png)
+    ![](/assets/hi-conf.png) 
 
     Create PV and PVC
     ```bash
