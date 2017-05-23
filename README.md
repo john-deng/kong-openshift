@@ -97,9 +97,9 @@ Kong can easily be provisioned to Openshift cluster using the following steps:
 
     ![](/assets/kong-dashboard-add-api.png)
 
-    Now you can check your api 
+    Now, let's check the api
     ```bash
-    http http://kong-proxy-gateway-dev.openshift-subdomain.com/projectname/appname/api/health
+    http http://kong-proxy-gateway-dev.172.16.5.95.nip.io/projectname/appname/api/health
     ```
 
     ![](/assets/http-check-gateway-health.png)
