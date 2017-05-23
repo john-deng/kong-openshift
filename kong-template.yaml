@@ -255,13 +255,13 @@ objects:
           image: "kong-dashboard:${KONG_DASHBOARD_TAG}"
           imagePullPolicy: IfNotPresent
           env:
-          - name: kong-dashboard-name
-            value: ${KONG_DASHBOARD_USER}
-          - name: kong-dashboard-pass
-            value: ${KONG_DASHBOARD_PASSWORD}
           - name: KONG_HOST
             value: kong.${PROJECT_NAME}.svc.cluster.local
-          #command: [ "npm", "start", "--", "-a", "${KONG_DASHBOARD_USER}=${KONG_DASHBOARD_PASSWORD}" ]
+          - name: KONG_DASHBOARD_USER
+            value: ${KONG_DASHBOARD_USER}
+          - name: KONG_DASHBOARD_PASSWORD
+            value: ${KONG_DASHBOARD_PASSWORD}
+          command: [ "npm", "start", "--", "-a", "${KONG_DASHBOARD_USER}=${KONG_DASHBOARD_PASSWORD}" ]
           ports:
           - name: dashboard
             containerPort: 8080
@@ -312,7 +312,7 @@ parameters:
 - name: PROJECT_NAME
   displayName: Database Namespace
   description: The namespace of the database.
-  value: ${NAMESPACE}
+  value: gateway
   required: true
 - name: DATABASE_SERVICE_NAME
   displayName: Database Service Name
