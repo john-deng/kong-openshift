@@ -2,7 +2,7 @@
 
 ![](/assets/kong.png)
 
-Kong can easily be provisioned to Kubernetes cluster using the following steps:
+Kong can easily be provisioned to Openshift cluster using the following steps:
 
 1. **Initial setup**
 
@@ -74,12 +74,20 @@ Kong can easily be provisioned to Kubernetes cluster using the following steps:
     oc expose svc/kong-proxy
     ```
 
-    Screenshots
-    
-    Kong
+2. **Usage**
+
+    Scale up Kong
 
     ![](/assets/kong-view.png)
 
-    Kong dashboard
+    Open Kong dashboard, after exposed svc/kong-dashboard, you should able to open dashboard on your web browser.
 
     ![](/assets/kong-dashboard-view.png)
+
+    Setting Kong node URL
+
+    ![](/assets/kong-dashboard-conf.png)
+
+    Add API to gateway
+
+    ![](/assets/kong-dashboard-add-api.png)
