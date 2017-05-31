@@ -17,7 +17,7 @@ Kong can easily be provisioned to Openshift cluster using the following steps:
     Download or clone the following repo:
 
     ```bash
-    git clone git@github.com:john-deng/kong-openshift.git
+    git clone https://github.com/john-deng/kong-openshift.git
     cd kong-openshift    
     ```
 
