@@ -8,7 +8,7 @@ Kong can easily be provisioned to Openshift cluster using the following steps:
 
     Install [hi-cli](https://github.com/hi-cli/hi-cli) and [hi-heketi](https://github.com/hi-cli/hi-heketi)
     ```bash
-    bash -c "$(curl -fsSL https://raw.githubusercontent.com/hi-cli/hi-cli/master/bin/install)"
+    bash -c "$(curl -fsSL https://raw.githubusercontent.com/hi-cli/hi-cli/master/bin/install/init)"
 
     hi package install heketi
 
